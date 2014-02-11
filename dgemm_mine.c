@@ -61,18 +61,17 @@ void square_dgemm(const int M,const double * restrict A,const double * restrict 
 {
     __assume_aligned(A, 16);
     __assume_aligned(B, 16);
-    __assume_aligned(C, 16);
-	
-	double* Ak = (double*) malloc(M * M * sizeof(double));
-    double* Bk = (double*) malloc(M * M * sizeof(double));
-    double* Ck = (double*) malloc(M * M * sizeof(double));
-	
+    __assume_aligned(C, 16);	
+	double* Ak = (double*) malloc((M+1) * (M+1) * sizeof(double));
+    double* Bk = (double*) malloc((M+1) * (M+1) * sizeof(double));
+    double* Ck = (double*) malloc((M+1) * (M+1) * sizeof(double));	
 	__assume_aligned(Ak, 16);
 	__assume_aligned(Bk, 16);
 	__assume_aligned(Ck, 16);
-
-	memset(Ck,0,M *M * sizeof(double));
+	memset(Ck, 0, (M+1) * (M+1) * sizeof(double));
 	
+	if ((M%2)==0)
+	{	
 	for (int i = 0; i < (M/2); i++)
 	{
        for (int j = 0; j < M; j++)
@@ -109,48 +108,101 @@ void square_dgemm(const int M,const double * restrict A,const double * restrict 
 			C[i*2+1+j*2*M]=Ck[i*2*M+4*j+3];
 		}
 	}
-}
-
-/*void to_kdgemm_A(const int M, const double* restrict A, double * restrict Ak)
-{
-	__assume_aligned(A, 16);
-	__assume_aligned(Ak, 16);
-	for (int i = 0; i < (M/2); i++)
+	}
+	else
+	{
+	double* temp = (double*) malloc((M+1) * (M+1) * sizeof(double));	
+	__assume_aligned(temp, 16);
+	
+	for (int i = 0; i < M; i++)
 	{
        for (int j = 0; j < M; j++)
 	   {
-			Ak[2*j+i*2*M]=A[2*i+j*M];
-			Ak[2*j+1+i*2*M]=A[2*i+1+j*M];
+			temp[j+i*(M+1)]=A[j+i*M];
+	   }
+	   temp[M+i*(M+1)]=0;
+	}
+	for (int j = 0; j < (M+1); j++)
+	{
+		temp[M*(M+1)+j]=0;
+	}
+	
+	for (int i = 0; i < ((M+1)/2); i++)
+	{
+       for (int j = 0; j < (M+1); j++)
+	   {
+			Ak[2*j+i*2*(M+1)]=temp[2*i+j*(M+1)];
+			Ak[2*j+1+i*2*(M+1)]=temp[2*i+1+j*(M+1)];
 	   }
 	}
-}
-
-void to_kdgemm_B(const int M, const double* restrict B, double * restrict Bk)
-{
-    __assume_aligned(B, 16);
-	__assume_aligned(Bk, 16);
-	for (int i = 0; i < (M/2); i++)
+	
+	/*printf("A matrix:\n");
+    for (int i = 0; i < DIM_M; ++i) {
+        for (int j = 0; j < DIM_N; ++j)
+            printf(" %g", A[i+j*DIM_M]);
+        printf("\n");
+    }
+	printf("Ak:\n");
+	for (int i = 0; i < ((DIM_M+1)*(DIM_M+1)); ++i)
+		printf(" %g", Ak[i]);
+	printf("\n");*/
+	
+	for (int i = 0; i < M; i++)
 	{
        for (int j = 0; j < M; j++)
 	   {
-			Bk[2*j+i*2*M]=B[j+2*M*i];
-			Bk[2*j+1+i*2*M]=B[j+(2*i+1)*M];
+			temp[j+i*(M+1)]=B[j+i*M];
+	   }
+	   temp[M+i*(M+1)]=0;
+	}
+	for (int j = 0; j < (M+1); j++)
+	{
+		temp[M*(M+1)+j]=0;
+	}
+	for (int i = 0; i < ((M+1)/2); i++)
+	{
+       for (int j = 0; j < (M+1); j++)
+	   {
+			Bk[2*j+i*2*(M+1)]=temp[j+2*(M+1)*i];
+			Bk[2*j+1+i*2*(M+1)]=temp[j+(2*i+1)*(M+1)];
 	   }
 	}
-}
-
-void from_kdgemm_C(const int M, const double* restrict Ck, double * restrict C)
-{
-    __assume_aligned(C, 16);
-	__assume_aligned(Ck, 16);
-	for (int i = 0; i < (M/2); i++) 
+	/*printf("B matrix:\n");
+    for (int i = 0; i < DIM_M; ++i) {
+        for (int j = 0; j < DIM_N; ++j)
+            printf(" %g", B[i+j*DIM_M]);
+        printf("\n");
+    }
+	printf("Bk:\n");
+	for (int i = 0; i < ((DIM_M+1)*(DIM_M+1)); ++i)
+		printf(" %g", Bk[i]);
+	printf("\n");*/
+	
+	for (int i = 0; i < ((M+1)/2); i++) 
 	{
-		for (int j = 0; j < (M/2); j++) 
+		for (int j = 0; j < ((M+1)/2); j++) 
 		{
-			C[i*2+j*2*M]=Ck[i*2*M+4*j];
-			C[i*2+1+(j*2+1)*M]=Ck[i*2*M+4*j+1];
-			C[i*2+(j*2+1)*M]=Ck[i*2*M+4*j+2];
-			C[i*2+1+j*2*M]=Ck[i*2*M+4*j+3];
+            kdgemm2P2((M+1),Ck+4*j+i*2*(M+1),Ak+2*(M+1)*i,Bk+2*(M+1)*j);
+        }
+    }
+	
+	for (int i = 0; i < ((M+1)/2); i++) 
+	{
+		for (int j = 0; j < ((M+1)/2); j++) 
+		{
+			temp[i*2+j*2*(M+1)]=Ck[i*2*(M+1)+4*j];
+			temp[i*2+1+(j*2+1)*(M+1)]=Ck[i*2*(M+1)+4*j+1];
+			temp[i*2+(j*2+1)*(M+1)]=Ck[i*2*(M+1)+4*j+2];
+			temp[i*2+1+j*2*(M+1)]=Ck[i*2*(M+1)+4*j+3];
 		}
 	}
-}*/
+	for (int i = 0; i < M; i++)
+	{
+       for (int j = 0; j < M; j++)
+	   {
+			C[j+i*M]=temp[j+i*(M+1)];
+	   }
+	}
+	}
+}
+
